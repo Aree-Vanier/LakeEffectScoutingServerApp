@@ -64,96 +64,107 @@ public class PullDataThread extends Thread{
         //true if the try catch breaks
         boolean error = false;
 
-        try {
-            bluetoothSocket.connect();
-            in = bluetoothSocket.getInputStream();
-            out = bluetoothSocket.getOutputStream();
+        if(device.getName().contains("Qualitative")){   //Pull code for qualitative devices
+            try{
 
-            if(mainActivity.labels == null){
+            }catch (IOException e){
+                e.printStackTrace();
+
+                error = true;
+            }
+        }
+        else {  //Pull code for quantitative devices
+            try {
+                bluetoothSocket.connect();
+                in = bluetoothSocket.getInputStream();
+                out = bluetoothSocket.getOutputStream();
+
+                if (mainActivity.labels == null) {
+                    mainActivity.runOnUiThread(new Thread() {
+                        public void run() {
+                            mainActivity.status.setText("Connected! Requesting Labels from " + device.getName() + "...");
+                        }
+                    });
+
+                    out.write("REQUEST LABELS".getBytes(Charset.forName("UTF-8")));
+                    String labels = waitForMessage();
+
+                    int version = Integer.parseInt(labels.split(":::")[0]);
+                    if (version >= mainActivity.minVersionNum) {
+                        mainActivity.labels = labels.split(":::")[1];
+                    } else {
+                        //send toast saying that the client has a version too old
+                        mainActivity.runOnUiThread(new Thread() {
+                            public void run() {
+                                Toast.makeText(mainActivity, "The Scouting App on the device you connected too is too old, either tell them to update or change the minimum version number", Toast.LENGTH_LONG).show();
+                            }
+                        });
+                        running = false;
+                        return;
+                    }
+                }
+
                 mainActivity.runOnUiThread(new Thread() {
-                   public void run() {
-                       mainActivity.status.setText("Connected! Requesting Labels from " + device.getName() + "...");
-                   }
-               });
+                    public void run() {
+                        mainActivity.status.setText("Connected! Requesting Data from " + device.getName() + "...");
+                    }
+                });
 
-                out.write("REQUEST LABELS".getBytes(Charset.forName("UTF-8")));
-                String labels = waitForMessage();
+                out.write("REQUEST DATA".getBytes(Charset.forName("UTF-8")));
+                String message = waitForMessage();
 
-                int version = Integer.parseInt(labels.split(":::")[0]);
-                if(version >= mainActivity.minVersionNum){
-                    mainActivity.labels = labels.split(":::")[1];
-                }else{
+                message = message.substring(0, message.length() - 1);
+
+                mainActivity.runOnUiThread(new Thread() {
+                    public void run() {
+                        mainActivity.status.setText("Connected! Saving Data from " + device.getName() + "...");
+                    }
+                });
+
+                int version = Integer.parseInt(message.split(":::")[0]);
+                if (version < mainActivity.minVersionNum) {
                     //send toast saying that the client has a version too old
-                    mainActivity.runOnUiThread(new Thread(){
-                        public void run(){
+                    mainActivity.runOnUiThread(new Thread() {
+                        public void run() {
                             Toast.makeText(mainActivity, "The Scouting App on the device you connected too is too old, either tell them to update or change the minimum version number", Toast.LENGTH_LONG).show();
                         }
                     });
                     running = false;
                     return;
-                }
-            }
+                } else {
+                    String[] data = message.split(":::")[1].split("::");
 
-            mainActivity.runOnUiThread(new Thread() {
-                public void run() {
-                    mainActivity.status.setText("Connected! Requesting Data from " + device.getName() + "...");
-                }
-            });
-
-            out.write("REQUEST DATA".getBytes(Charset.forName("UTF-8")));
-            String message = waitForMessage();
-
-            message = message.substring(0, message.length() - 1);
-
-            mainActivity.runOnUiThread(new Thread() {
-                public void run() {
-                mainActivity.status.setText("Connected! Saving Data from " + device.getName() + "...");
-                }
-            });
-
-            int version = Integer.parseInt(message.split(":::")[0]);
-            if(version < mainActivity.minVersionNum){
-                //send toast saying that the client has a version too old
-                mainActivity.runOnUiThread(new Thread(){
-                    public void run(){
-                        Toast.makeText(mainActivity, "The Scouting App on the device you connected too is too old, either tell them to update or change the minimum version number", Toast.LENGTH_LONG).show();
-                    }
-                });
-                    running = false;
-                    return;
-            }else{
-                String[] data = message.split(":::")[1].split("::");
-
-                if(data[0].equals("nodata")){
-                    mainActivity.runOnUiThread(new Thread() {
-                        public void run() {
-                            mainActivity.status.setText("Connected! " + device.getName() + " has no data to send...");
+                    if (data[0].equals("nodata")) {
+                        mainActivity.runOnUiThread(new Thread() {
+                            public void run() {
+                                mainActivity.status.setText("Connected! " + device.getName() + " has no data to send...");
+                            }
+                        });
+                    } else {
+                        for (int i = 0; i < data.length; i++) {
+                            if (mainActivity.uuids.contains(mainActivity.getUUIDFromData(data[i]))) {
+                                //send toast saying that the data already exists
+                                mainActivity.runOnUiThread(new Thread() {
+                                    public void run() {
+                                        Toast.makeText(mainActivity, "Duplicate data detected and removed", Toast.LENGTH_LONG).show();
+                                    }
+                                });
+                                continue;
+                            }
+                            mainActivity.save(data[i], mainActivity.labels);
+                            mainActivity.uuids.add(data[i]);
                         }
-                    });
-                }else{
-                    for(int i = 0; i < data.length; i++){
-                        if(mainActivity.uuids.contains(mainActivity.getUUIDFromData(data[i]))){
-                            //send toast saying that the data already exists
-                            mainActivity.runOnUiThread(new Thread(){
-                                public void run(){
-                                    Toast.makeText(mainActivity, "Duplicate data detected and removed", Toast.LENGTH_LONG).show();
-                                }
-                            });
-                            continue;
-                        }
-                        mainActivity.save(data[i], mainActivity.labels);
-                        mainActivity.uuids.add(data[i]);
                     }
+
                 }
 
+                out.write("RECEIVED".getBytes(Charset.forName("UTF-8")));
+
+            } catch (IOException e) {
+                e.printStackTrace();
+
+                error = true;
             }
-
-            out.write("RECEIVED".getBytes(Charset.forName("UTF-8")));
-
-        } catch (IOException e) {
-            e.printStackTrace();
-
-            error = true;
         }
 
         //send toast of completion
