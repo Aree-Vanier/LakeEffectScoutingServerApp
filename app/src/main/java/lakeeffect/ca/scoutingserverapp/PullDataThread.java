@@ -69,7 +69,7 @@ public class PullDataThread extends Thread{
             in = bluetoothSocket.getInputStream();
             out = bluetoothSocket.getOutputStream();
 
-            if (mainActivity.labels == null) {
+            if (mainActivity.labels == null || mainActivity.qualitativeLabels == null) {
                 mainActivity.runOnUiThread(new Thread() {
                     public void run() {
                         mainActivity.status.setText("Connected! Requesting Labels from " + device.getName() + "...");
@@ -80,7 +80,9 @@ public class PullDataThread extends Thread{
                 String labels = waitForMessage();
 
                 int version = Integer.parseInt(labels.split(":::")[0]);
-                if (version >= mainActivity.minVersionNum) {
+                if (version >= mainActivity.minVersionNum && mainActivity.labels == null) {
+                    mainActivity.labels = labels.split(":::")[1];
+                } else if (version == -1 && mainActivity.qualitativeLabels == null){// -1 is the hard-coded version for the qualitative app
                     mainActivity.labels = labels.split(":::")[1];
                 } else {
                     //send toast saying that the client has a version too old
@@ -112,7 +114,7 @@ public class PullDataThread extends Thread{
             });
 
             int version = Integer.parseInt(message.split(":::")[0]);
-            if (version < mainActivity.minVersionNum) {
+            if (version < mainActivity.minVersionNum || version == -1) { //-1 is hard-coded qualitative app version
                 //send toast saying that the client has a version too old
                 mainActivity.runOnUiThread(new Thread() {
                     public void run() {
@@ -141,7 +143,8 @@ public class PullDataThread extends Thread{
                             });
                             continue;
                         }
-                        mainActivity.save(data[i], mainActivity.labels);
+                        if(version == -1) mainActivity.save(data[i], mainActivity.qualitativeLabels); // If its the qualitatve app, use the qualitative labels
+                        else mainActivity.save(data[i], mainActivity.labels); // Otherwise use the normal labels
                         mainActivity.uuids.add(data[i]);
                     }
                 }

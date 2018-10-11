@@ -52,7 +52,8 @@ public class MainActivity extends AppCompatActivity {
     int minVersionNum;
     TimeOff targetTimeOff;
 
-    String labels = null; //Retrieved one time per session during the first pull
+    String labels = null; //Retrieved until both are set
+    String qualitativeLabels = null;
 
     ArrayList<String> uuids = new ArrayList<>();
 
